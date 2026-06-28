@@ -1,0 +1,10 @@
+# Virtual environment
+.venv/
+__pycache__/
+*.pyc
+
+# Large binary datasets and zips
+*.pkl
+*.mat
+*.zip
+our_data/
