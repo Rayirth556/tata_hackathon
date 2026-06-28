@@ -1,0 +1,19 @@
+Owns: Everything involving raw signal processing and simulation.
+
+Receive clean HUST dataframe from Gauri
+Feature extraction from raw V(t), I(t), T(t):
+
+Coulomb counting → discharge capacity
+ΔV/ΔI → internal resistance
+dV/dQ variance
+Temperature mean and max per cycle
+Discharge rate variance
+Charge time
+Capacity fade rate (linear regression slope over cycles 1–100)
+
+
+Apply same feature extraction to Severson data
+Feature compatibility check — verify Severson and HUST feature vectors have matching ranges and no NaNs
+Write the HUST replay script that streams V(t), I(t), T(t) cycle by cycle simulating a live BMS feed
+
+Deliverable by end of Week 2: Feature matrix X (one row per cell, same format for both datasets), HUST replay script.

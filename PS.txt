@@ -1,0 +1,15 @@
+Problem Statement
+Background
+Lithium-ion battery degradation is nonlinear and difficult to predict until significant capacity loss has already occurred. In industrial and automotive applications, this reactive detection leads to unplanned failures, safety risks, and suboptimal maintenance scheduling. Existing battery management systems (BMS) report current state-of-health (SoH) but do not predict when degradation will accelerate — making them fundamentally diagnostic rather than prognostic.
+Problem
+Current approaches fail to identify the onset of accelerated degradation before the knee point — the cycle at which capacity decline transitions from gradual to rapid. By the time a BMS flags degradation, the battery is already past the point where intervention is most effective.
+Objective
+Design and validate an explainable edge AI system that predicts accelerated battery degradation before the knee point occurs, using only features extractable from early charge-discharge cycles (cycles 1–100), with inference feasible on resource-constrained embedded hardware.
+Specific Targets
+
+Knee point definition: cycle at which the second derivative of discharge capacity with respect to cycle number exceeds a threshold of 0.003 Ah/cycle² (computed on Savitzky-Golay smoothed capacity curves, window=11)
+Prediction horizon: classification and RUL estimate made from cycle 100 data only — no look-ahead
+Model: XGBoost primary; LSTM fallback if classification AUROC < 0.82
+Explainability: SHAP TreeExplainer (XGBoost) — per-prediction feature attribution, not post-hoc global summaries
+Edge target: STM32H7 (Cortex-M7, 480 MHz, 1MB SRAM) — prototype runs on host CPU single-core; inference latency and ONNX model size reported as deployment proxy
+Dataset: Severson et al. 2019, 124 LFP/graphite cells, Nature Energy

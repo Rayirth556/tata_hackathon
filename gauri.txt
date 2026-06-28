@@ -1,0 +1,20 @@
+Dataset:
+MIT Severson Dataset: Look for official sources and relevant files to download
+HUST Dataset(Mendeley): https://data.mendeley.com/datasets/nsc7hnsg4s/2
+
+Phase 1 — Normal aging: Capacity drops slowly and predictably
+Phase 2 — Accelerated degradation: Something triggers internally and the battery starts degrading at 5x rate
+
+The knee point is the cycle where Phase 1 ends and Phase 2 begins.
+
+Main goal of the project: predict the knee point cycle number for a given battery
+
+Severson: Teaches the Model What a Knee Looks Like
+HUST: Runs the Trained Model in a Realistic Setting
+
+
+Download and load Severson (.pkl from Kaggle) and HUST (Mendeley)
+Clean both datasets — drop corrupted cells, handle missing values
+Segment HUST raw files into per-cycle arrays
+Build clean dataframes: one from Severson (cycle-level summaries), one from HUST (raw per-cycle arrays)
+Hand off to Triya (feature extraction) and Krishiv (knee labeling) simultaneously

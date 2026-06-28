@@ -1,0 +1,15 @@
+Owns: The feature extractor bridge layer and the entire edge story.
+
+Write the feature extractor in Python — takes raw cycle arrays, outputs cycle-summary feature vector (same format Triya produces, but as a callable function Krishiv's model can consume)
+Integrate Triya's HUST replay script with your feature extractor — full end-to-end pipeline in Python first
+Receive trained model (.pkl) from Krishiv
+Convert model to C using emlearn or micromlgen
+Flash to ESP32
+Measure and report three numbers:
+
+Inference latency via esp_timer_get_time()
+Flash usage from idf.py size
+RAM usage from idf.py size
+
+
+Own end-to-end integration — make the full demo run: HUST raw data in → ESP32 inference out → SHAP explanation displayed

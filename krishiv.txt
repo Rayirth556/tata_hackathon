@@ -1,0 +1,14 @@
+Owns: Everything after the feature matrix exists.
+
+Receive feature matrix X from Triya
+Knee-point labeling on Severson cells using Kneedle algorithm — visually verify on at least 15 cells by plotting detected knee overlaid on capacity curve
+Train XGBoost on Severson (features + knee labels)
+Cross-validate — held-out Severson cells first, then HUST-derived features
+Report real numbers: MAE in cycles, prediction error distribution
+SHAP analysis:
+
+Global feature importance plot
+Per-prediction explanation for the demo cell
+
+
+Make all plots presentation-ready

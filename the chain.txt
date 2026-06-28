@@ -1,0 +1,17 @@
+Gauri (Week 1-2)
+  → clean Severson dataframe → Triya + Krishiv
+  → clean HUST dataframe → Triya
+
+Triya (Week 2-3)
+  → feature matrix X → Krishiv
+  → HUST replay script → Rayirth
+
+Krishiv (Week 3-4)
+  → knee labels (parallel with Triya)
+  → trained model .pkl → Rayirth
+  → SHAP plots → video
+
+Rayirth (Week 2-4)
+  → feature extractor (week 2, parallel)
+  → ESP32 deployment (week 4, after model arrives)
+  → full pipeline integration (week 5)
