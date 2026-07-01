@@ -232,20 +232,10 @@ def extract_severson_features():
 # HUST helpers
 # ─────────────────────────────────────────────────────────────────
 
-def _estimate_ir_hust(V, I, threshold=0.05):
-    """Estimate DC internal resistance at the discharge onset step."""
-    abs_I = np.abs(I)
-    onset = np.where(abs_I > threshold)[0]
-    if len(onset) == 0 or onset[0] == 0:
-        return np.nan
-    i0 = onset[0]
-    V_rest = np.mean(V[:i0])
-    V_load = V[i0]
-    I_load = I[i0]
-    if abs(I_load) < 1e-6:
-        return np.nan
-    ir = abs(V_rest - V_load) / abs(I_load)
-    return float(ir) if 0.0 < ir < 0.15 else np.nan
+# NOTE: HUST IR is computed in clean_hust.py using the last CV-charge row
+# as the OCV proxy and the first discharge row as the loaded voltage:
+#   IR = (V_cv_last - V_dis_first) / (I_dis_first - I_cv_last)
+# This is stored per cycle as 'ir_est' (Ohm) in hust_clean.pkl.
 
 
 def _longest_cc_stage(V, I, Q, tol_frac=0.05):
@@ -301,12 +291,13 @@ def extract_hust_features():
         else:
             row["QD_100"] = np.nan
 
-        # ── IR ─────────────────────────────────────────────────
+        # ── IR: read pre-computed ir_est from clean pickle ─────
+        # Computed in clean_hust.py via CV→discharge voltage step:
+        #   IR = ΔV / ΔI at the charge/discharge phase boundary.
         def _ir_hust(cn):
             if cn not in cycle_map:
                 return np.nan
-            c = cycle_map[cn]
-            return _estimate_ir_hust(c["V"], c["I"])
+            return float(cycle_map[cn].get("ir_est", float("nan")))
 
         row["IR_cycle2"]   = _ir_hust(2)
         row["IR_cycle100"] = _ir_hust(100)

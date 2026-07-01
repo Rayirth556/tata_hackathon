@@ -33,6 +33,8 @@ Generated: 2026-06-20 15:51
 | `I` | A | np.float64 array | Current time series (converted from mA) |
 | `Capacity` | Ah | np.float64 array | Capacity time series (converted from mAh) |
 | `t` | s | np.float64 array | Time stamps |
+| `charge_time_s` | s | float | Duration of CC charge phase |
+| `ir_est` | Ω | float | DC internal resistance, estimated from CV→discharge voltage step: `(V_cv_last − V_dis_first) / (I_dis_first − I_cv_last)` |
 
 ## ⚠️ CRITICAL: HUST Temperature Gap
 
