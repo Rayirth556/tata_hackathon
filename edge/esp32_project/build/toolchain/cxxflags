@@ -1,0 +1,7 @@
+-Wno-frame-address
+-mlongcalls
+-fno-builtin-memcpy
+-fno-builtin-memset
+-fno-builtin-bzero
+"-specs=/home/godkiller/Documents/tata/edge/esp32_project/build/specs/picolibc.specs"
+-fno-rtti

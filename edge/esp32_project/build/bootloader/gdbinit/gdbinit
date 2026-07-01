@@ -1,0 +1,2 @@
+source /home/godkiller/Documents/tata/edge/esp32_project/build/bootloader/gdbinit/symbols
+source /home/godkiller/Documents/tata/edge/esp32_project/build/bootloader/gdbinit/connect
