@@ -77,7 +77,7 @@ def resolve_feature_cols(feature_set, available_cols):
             raise ValueError(f"Joint feature set missing columns: {missing}")
         return cols
     if feature_set == "severson":
-        return [c for c in available_cols if c not in ("cell_id", "knee_cycle", "knee_early")]
+        return [c for c in available_cols if c not in ("cell_id", "knee_cycle", "knee_early") and not c.startswith("T")]
     if feature_set == "hust":
         # temp cols are NaN for HUST -> drop them explicitly rather than
         # feeding NaNs to XGBoost
@@ -140,8 +140,9 @@ def train_one(X_train, y_reg, y_clf):
 
 
 def main():
+    default_repo_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     ap = argparse.ArgumentParser()
-    ap.add_argument("--repo_dir", default="/home/claude/tata_hackathon")
+    ap.add_argument("--repo_dir", default=default_repo_dir)
     ap.add_argument("--feature_set", choices=["severson", "hust", "joint"], required=True)
     ap.add_argument("--out_dir", default="models")
     args = ap.parse_args()

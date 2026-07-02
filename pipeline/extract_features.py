@@ -257,11 +257,13 @@ def _longest_cc_stage(V, I, Q, tol_frac=0.05):
     breaks = list(np.where(dI > thr)[0] + 1)
     bounds = [0] + breaks + [len(I)]
 
-    # Find longest segment
-    best_len, best_s, best_e = 0, 0, len(I)
+    # Find segment with maximum voltage span
+    best_span, best_s, best_e = -1.0, 0, len(I)
     for s, e in zip(bounds[:-1], bounds[1:]):
-        if e - s > best_len:
-            best_len, best_s, best_e = e - s, s, e
+        if e - s >= 5:
+            span = np.max(V[s:e]) - np.min(V[s:e])
+            if span > best_span:
+                best_span, best_s, best_e = span, s, e
 
     return V[best_s:best_e], Q[best_s:best_e]
 

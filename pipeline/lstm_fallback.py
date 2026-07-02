@@ -152,8 +152,9 @@ def run_cv(cell_ids, X, labels_df, split, epochs=60, batch_size=8):
 
 
 def main():
+    default_repo_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     ap = argparse.ArgumentParser()
-    ap.add_argument("--repo_dir", default="/home/claude/tata_hackathon")
+    ap.add_argument("--repo_dir", default=default_repo_dir)
     ap.add_argument("--epochs", type=int, default=60)
     ap.add_argument("--out_dir", default="models")
     args = ap.parse_args()

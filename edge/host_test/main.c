@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <time.h>
 #include <string.h>
 #include "model_reg.h"
@@ -9,12 +10,22 @@
 int main() {
     double input[13];
     
-    // Read 13 double features from stdin
-    for (int i = 0; i < 13; ++i) {
-        if (scanf("%lf", &input[i]) != 1) {
-            fprintf(stderr, "Error: Failed to read feature at index %d from stdin.\n", i);
+    // Read 13 comma-separated double features from stdin
+    char line[1024];
+    if (fgets(line, sizeof(line), stdin) != NULL) {
+        char *token = strtok(line, ",");
+        int idx = 0;
+        while (token != NULL && idx < 13) {
+            input[idx++] = atof(token);
+            token = strtok(NULL, ",");
+        }
+        if (idx < 13) {
+            fprintf(stderr, "Error: Only read %d of 13 features from stdin.\n", idx);
             return 1;
         }
+    } else {
+        fprintf(stderr, "Error: Empty input\n");
+        return 1;
     }
     
     // Warm-up and basic prediction check
