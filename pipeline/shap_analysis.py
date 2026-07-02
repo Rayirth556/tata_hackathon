@@ -1,130 +1,146 @@
 """
-shap_analysis.py — Compute SHAP attributions for model explainability.
+tatahack3 / src / shap_analysis.py
 
-Generates:
-  1. Global beeswarm plot of feature importances (plots/shap_beeswarm.png).
-  2. Per-prediction waterfall plot for a demo cell (plots/shap_waterfall_demo.png).
+Point 3 — Global beeswarm + per-prediction waterfall SHAP.
+Generalized version of the repo's shap_analysis.py: works for any of
+severson / hust / joint feature sets, and lets you pick the demo cell
+explicitly (should be the HUST demo cell Rayirth runs on the ESP32, per
+task doc — only usable once Triya's HUST knee labels land).
 
-Allows specifying the cell ID via command-line arguments.
+Run:
+    python src/shap_analysis.py --feature_set hust --demo_cell hust_1-1 \
+        --repo_dir /path/to/tata_hackathon
 """
 
-import pandas as pd
-import numpy as np
-import json
-import os
-import joblib
-import shap
 import argparse
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
+import os
 
-# ── Configuration ──────────────────────────────────────────────────────────────
-WORKSPACE = '/home/godkiller/Documents/tata'
-SEVERSON_FEATURES_PATH = os.path.join(WORKSPACE, 'data/severson_features.pkl')
-KNEE_LABELS_PATH = os.path.join(WORKSPACE, 'data/knee_labels.csv')
-SPLIT_PATH = os.path.join(WORKSPACE, 'data/train_test_split.json')
-MODEL_REG_PATH = os.path.join(WORKSPACE, 'models/trained_model_reg.pkl')
-PLOT_DIR = os.path.join(WORKSPACE, 'plots')
+import joblib
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import shap
+
+from train_model import load_inputs, build_dataset  # reuse the same data logic
 
 
 def main():
-    # ── Parse command-line args ────────────────────────────────────────────
-    parser = argparse.ArgumentParser(description="SHAP explainability analysis.")
-    parser.add_argument('--cell_id', type=str, default=None,
-                        help="Cell ID for the demo waterfall plot. Default: first cell in secondary test set.")
-    args = parser.parse_args()
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--repo_dir", default="/home/claude/tata_hackathon")
+    ap.add_argument("--feature_set", choices=["severson", "hust", "joint"], required=True)
+    ap.add_argument("--demo_cell", default=None,
+                     help="cell_id for the waterfall plot. Should be the HUST demo "
+                          "cell for the ESP32 demo. Defaults to first test cell.")
+    ap.add_argument("--demo_feature_source", choices=["severson", "hust"], default=None,
+                     help="Use this if the demo cell lives in a different dataset than "
+                          "--feature_set trains on (e.g. --feature_set joint "
+                          "--demo_feature_source hust, since 'joint' trains on Severson "
+                          "only but the ESP32 demo cell is a HUST cell). Only works if "
+                          "all of feature_cols exist in that dataset's features file too "
+                          "(true for the 9-feature 'joint' set).")
+    ap.add_argument("--model_dir", default="models")
+    ap.add_argument("--plot_dir", default="outputs/plots")
+    args = ap.parse_args()
 
-    # ── Load data ──────────────────────────────────────────────────────────
-    if not os.path.exists(SEVERSON_FEATURES_PATH):
-        print(f"⚠️ Features file {SEVERSON_FEATURES_PATH} does not exist yet. Cannot run SHAP analysis.")
-        return
-    if not os.path.exists(MODEL_REG_PATH):
-        print(f"⚠️ Model file {MODEL_REG_PATH} does not exist yet. Run train_model.py first.")
-        return
+    model_path = os.path.join(args.model_dir, f"trained_model_{args.feature_set}.pkl")
+    if not os.path.exists(model_path):
+        raise FileNotFoundError(
+            f"{model_path} not found — run train_model.py --feature_set {args.feature_set} first."
+        )
+    bundle = joblib.load(model_path)
+    reg = bundle["regressor"]
+    feature_cols = bundle["feature_cols"]
 
-    features_df = pd.read_pickle(SEVERSON_FEATURES_PATH)
-    labels_df = pd.read_csv(KNEE_LABELS_PATH)
-    with open(SPLIT_PATH, 'r') as f:
-        split = json.load(f)
+    features_df, labels_df, split = load_inputs(args.repo_dir, args.feature_set)
+    data, feature_cols, threshold = build_dataset(features_df, labels_df, split, args.feature_set)
 
-    # Exclude cells that have no knee detected (has_knee is False)
-    valid_labels = labels_df[labels_df['has_knee']]
-    data = features_df.merge(valid_labels[['cell_id', 'knee_cycle']], on='cell_id')
+    train_pool_ids = set()
+    for fold in split["folds"].values():
+        train_pool_ids.update(fold["train"])
+        train_pool_ids.update(fold["val"])
+    test_df = data[~data["cell_id"].isin(train_pool_ids)]
+    if test_df.empty:
+        print("[WARN] no held-out secondary test cells for this feature_set — "
+              "using train pool for SHAP (fine for explainability demo, "
+              "just don't quote these as generalization numbers).")
+        test_df = data
 
-    all_features = [col for col in data.columns if col not in ['cell_id', 'knee_cycle']]
-    no_temp_features = [col for col in all_features if not col.startswith('T')]
+    X_test = test_df[feature_cols]
 
-    # Finalize train pool and secondary test set cells
-    train_pool_cells = []
-    for fold_id, fold_data in split['folds'].items():
-        train_pool_cells.extend(fold_data['train'])
-        train_pool_cells.extend(fold_data['val'])
-    train_pool_cells = list(set(train_pool_cells))
-    secondary_test_cells = split['secondary_test']
-
-    # Load trained regressor model
-    reg_model = joblib.load(MODEL_REG_PATH)
-    
-    # ── SHAP calculations ──────────────────────────────────────────────────
-    print("Initializing SHAP TreeExplainer...")
-    X_train = data[data['cell_id'].isin(train_pool_cells)][no_temp_features]
-    X_test = data[data['cell_id'].isin(secondary_test_cells)][no_temp_features]
-    
-    if X_test.empty:
-        print("  ⚠️ Test set is empty, using whole dataset for SHAP check.")
-        X_test = data[no_temp_features]
-        test_ids = data['cell_id'].tolist()
-    else:
-        test_ids = data[data['cell_id'].isin(secondary_test_cells)]['cell_id'].tolist()
-
-    explainer = shap.TreeExplainer(reg_model)
+    # ---- Global SHAP (TreeExplainer, per task doc — not feature_importances_) ----
+    explainer = shap.TreeExplainer(reg)
     shap_values = explainer(X_test)
 
-    # ── Global Explainability Plot ─────────────────────────────────────────
-    print("Generating global SHAP beeswarm plot...")
-    plt.figure(figsize=(12, 8))
-    # We must call shap.plots.beeswarm on the shap_values object
-    # Turn off show so we can modify titles and save via matplotlib
+    os.makedirs(args.plot_dir, exist_ok=True)
+    plt.figure()
     shap.plots.beeswarm(shap_values, show=False)
-    plt.title('Global Feature Importance (SHAP values)', fontsize=14, fontweight='bold', pad=15)
     plt.tight_layout()
-    
-    beeswarm_path = os.path.join(PLOT_DIR, 'shap_beeswarm.png')
+    beeswarm_path = os.path.join(args.plot_dir, f"shap_beeswarm_{args.feature_set}.png")
     plt.savefig(beeswarm_path, dpi=150)
     plt.close()
-    print(f"  Saved beeswarm plot to {beeswarm_path}")
+    print(f"[SAVED] {beeswarm_path}")
 
-    # ── Per-Prediction Waterfall Plot ──────────────────────────────────────
-    # Determine the cell to analyze
-    target_cell = args.cell_id
-    if target_cell is None:
-        target_cell = test_ids[0]
-        print(f"No cell_id provided. Defaulting to first test cell: {target_cell}")
-    else:
-        if target_cell not in test_ids:
-            if target_cell in data['cell_id'].tolist():
-                # Re-calculate SHAP specifically for this cell
-                X_target = data[data['cell_id'] == target_cell][no_temp_features]
-                shap_values_target = explainer(X_target)
-                shap_values = shap_values_target
-                test_ids = [target_cell]
-            else:
-                raise ValueError(f"Cell ID '{target_cell}' not found in dataset.")
+    # sanity check flagged in the task doc: if fade_slope dominates instead of
+    # dV/dQ variance, flag Triya's extraction as possibly flawed
+    mean_abs_shap = dict(zip(feature_cols, abs(shap_values.values).mean(axis=0)))
+    top_feature = max(mean_abs_shap, key=mean_abs_shap.get)
+    print(f"[INFO] top SHAP feature: {top_feature}")
+    if "fade_slope" in top_feature:
+        print("[FLAG] fade_slope dominates global SHAP — per task doc, this is "
+              "NOT expected (dV/dQ variance should dominate). Flag to Triya.")
 
-    target_idx = test_ids.index(target_cell)
-    print(f"Generating per-prediction SHAP waterfall plot for cell {target_cell}...")
-    
-    plt.figure(figsize=(10, 6))
-    shap.plots.waterfall(shap_values[target_idx], show=False)
-    plt.title(f'Feature Attribution for Demo Cell: {target_cell}', fontsize=14, fontweight='bold', pad=15)
+    # ---- Per-prediction waterfall for the demo cell ----
+    demo_cell = args.demo_cell
+
+    if args.demo_feature_source and args.demo_feature_source != args.feature_set:
+        # Demo cell lives in a different dataset than what the model trained on
+        # (e.g. joint model trained on Severson, but ESP32 demo cell is HUST).
+        # Score it directly using the trained regressor + this feature source's columns.
+        demo_features_df, _, _ = load_inputs(args.repo_dir, args.demo_feature_source)
+        if demo_cell is None:
+            demo_cell = demo_features_df["cell_id"].iloc[0]
+            print(f"[INFO] no --demo_cell given, defaulting to {demo_cell} "
+                  f"from {args.demo_feature_source}")
+        row = demo_features_df[demo_features_df["cell_id"] == demo_cell]
+        if row.empty:
+            raise ValueError(f"demo_cell '{demo_cell}' not found in "
+                              f"{args.demo_feature_source}_features.pkl")
+        missing = [c for c in feature_cols if c not in row.columns]
+        if missing:
+            raise ValueError(f"demo_feature_source '{args.demo_feature_source}' is "
+                              f"missing columns the model needs: {missing}")
+        X_demo = row[feature_cols]
+        demo_shap = explainer(X_demo)
+        plt.figure()
+        shap.plots.waterfall(demo_shap[0], show=False)
+        plt.tight_layout()
+        waterfall_path = os.path.join(
+            args.plot_dir, f"shap_waterfall_{args.feature_set}_{demo_cell}.png")
+        plt.savefig(waterfall_path, dpi=150)
+        plt.close()
+        print(f"[SAVED] {waterfall_path}  (demo cell scored from "
+              f"{args.demo_feature_source}_features.pkl, model trained on {args.feature_set})")
+        return
+
+    if demo_cell is None:
+        demo_cell = test_df["cell_id"].iloc[0]
+        print(f"[INFO] no --demo_cell given, defaulting to {demo_cell}")
+
+    if demo_cell not in test_df["cell_id"].values:
+        raise ValueError(f"demo_cell '{demo_cell}' not found in {args.feature_set} test set")
+
+    demo_idx = test_df.reset_index(drop=True).index[
+        test_df.reset_index(drop=True)["cell_id"] == demo_cell
+    ][0]
+
+    plt.figure()
+    shap.plots.waterfall(shap_values[demo_idx], show=False)
     plt.tight_layout()
-    
-    waterfall_path = os.path.join(PLOT_DIR, 'shap_waterfall_demo.png')
+    waterfall_path = os.path.join(args.plot_dir, f"shap_waterfall_{args.feature_set}_{demo_cell}.png")
     plt.savefig(waterfall_path, dpi=150)
     plt.close()
-    print(f"  Saved waterfall plot to {waterfall_path}")
+    print(f"[SAVED] {waterfall_path}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
