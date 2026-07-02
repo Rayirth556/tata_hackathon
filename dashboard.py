@@ -305,46 +305,55 @@ if run_inference:
     # Fallback / Local Simulation mode
     if conn_mode == "Host Simulation (Local C Binary)":
         c_bin_path = os.path.join(WORKSPACE, 'edge', 'host_test', 'host_test_bin')
-        if not os.path.exists(c_bin_path):
-            st.error("Missing compiled C host binary. Compile it in edge/host_test/ first!")
-            st.stop()
-            
-        with st.spinner("Running inference using compiled C binary..."):
+        
+        with st.spinner("Running inference (using C binary, falling back to Python if incompatible)..."):
             input_str = ",".join([f"{features_dict[col]:.17g}" for col in NO_TEMP_FEATURES])
-            try:
-                proc = subprocess.run([c_bin_path], input=input_str + "\n", text=True, capture_output=True, check=True)
-                c_output = proc.stdout.strip().split('\n')
-                
-                c_results = {}
-                for line in c_output:
-                    if ':' in line:
-                        k, v = line.split(':')
-                        c_results[k.strip()] = float(v.strip())
-                
-                knee_cycle = c_results["regression_prediction"]
-                early_prob = c_results["classification_prediction_prob_1"]
-                
-                # Fetch host C simulation latency
-                reg_latency_us = c_results.get("reg_latency_us", 0.0)
-                clf_latency_us = c_results.get("clf_latency_us", 0.0)
-                
-                # Perform live Python ↔ C alignment check!
-                py_reg_pred = reg_model.predict(features_df)[0]
-                py_clf_pred = clf_model.predict_proba(features_df)[0][1]
-                
-                reg_diff = abs(py_reg_pred - knee_cycle)
-                clf_diff = abs(py_clf_pred - early_prob)
-                
-                if reg_diff < 1e-4 and clf_diff < 1e-4:
-                    precision_alignment = "✅ Pass (Numerically Exact)"
-                else:
-                    precision_alignment = f"⚠️ Mismatch (Reg diff={reg_diff:.5f})"
-                
-                inference_source = "Host C Simulation"
-                
-            except Exception as e:
-                st.error(f"Error running host C simulator: {e}")
-                st.stop()
+            c_run_success = False
+            
+            # Check if binary exists and can be run (depends on OS compatibility)
+            if os.path.exists(c_bin_path):
+                try:
+                    proc = subprocess.run([c_bin_path], input=input_str + "\n", text=True, capture_output=True, check=True)
+                    c_output = proc.stdout.strip().split('\n')
+                    
+                    c_results = {}
+                    for line in c_output:
+                        if ':' in line:
+                            k, v = line.split(':')
+                            c_results[k.strip()] = float(v.strip())
+                    
+                    knee_cycle = c_results["regression_prediction"]
+                    early_prob = c_results["classification_prediction_prob_1"]
+                    
+                    # Fetch host C simulation latency
+                    reg_latency_us = c_results.get("reg_latency_us", 0.0)
+                    clf_latency_us = c_results.get("clf_latency_us", 0.0)
+                    
+                    # Perform live Python ↔ C alignment check!
+                    py_reg_pred = reg_model.predict(features_df)[0]
+                    py_clf_pred = clf_model.predict_proba(features_df)[0][1]
+                    
+                    reg_diff = abs(py_reg_pred - knee_cycle)
+                    clf_diff = abs(py_clf_pred - early_prob)
+                    
+                    if reg_diff < 1e-4 and clf_diff < 1e-4:
+                        precision_alignment = "✅ Pass (Numerically Exact)"
+                    else:
+                        precision_alignment = f"⚠️ Mismatch (Reg diff={reg_diff:.5f})"
+                    
+                    inference_source = "Host C Simulation"
+                    c_run_success = True
+                except Exception:
+                    pass
+            
+            if not c_run_success:
+                # If C binary is missing, compiled for a different OS, or crashes, fall back to Python models
+                knee_cycle = reg_model.predict(features_df)[0]
+                early_prob = clf_model.predict_proba(features_df)[0][1]
+                reg_latency_us = 0.0
+                clf_latency_us = 0.0
+                precision_alignment = "⚠️ Unverified (Pure Python Run)"
+                inference_source = "Python Fallback (C Binary Incompatible)"
 
     # Calculate metrics
     rul_cycles = max(0.0, knee_cycle - 100.0)
